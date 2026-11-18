@@ -1,0 +1,43 @@
+name: Build unsigned LinuxKit.app
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Tools
+        run: |
+          brew install meson ninja
+          xcodebuild -version
+      - name: Build unsigned
+        run: |
+          xcodebuild \
+            -project iSH.xcodeproj \
+            -scheme iSH-ARM64 \
+            -configuration Debug-ApplePleaseFixFB19282108 \
+            -destination 'generic/platform=iOS' \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            ROOT_BUNDLE_IDENTIFIER=com.sondre.linuxkit \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | tail -40
+      - name: Collect .app
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "LinuxKit.app" -path "*Products*" | head -1)
+          echo "Found: $APP"
+          mkdir -p out
+          cp -R "$APP" out/LinuxKit.app
+          ditto -c -k --sequesterRsrc out out/LinuxKit.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LinuxKit-app
+          path: out/LinuxKit.zip
+          if-no-files-found: error
+      - name: Build log tail
+        if: failure()
+        run: tail -80 build.log || true
